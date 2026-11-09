@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ইনভয়েস ম্যানেজার - VAI VAI COMPUTER</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        body {
+            font-family: 'Hind Siliguri', sans-serif;
+        }
+        .mono-font {
+            font-family: 'Courier Prime', monospace;
+        }
+
+        /* Print Specific Styles */
+        @media print {
+            body {
+                background: white !important;
+                color: black !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-area {
+                box-shadow: none !important;
+                border: none !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            @page {
+                size: A4 portrait;
+                margin: 12mm;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 antialiased">
+
+    <!-- Top Navigation Bar -->
+    <header class="no-print bg-slate-900 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-3">
+            <div class="flex items-center space-x-2">
+                <i data-lucide="file-text" class="text-blue-400 w-7 h-7"></i>
+                <h1 class="text-xl font-bold tracking-wide">ইনভয়েস ম্যানেজার (ফায়ারবেজ কানেক্টেড)</h1>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="flex-1 max-w-md mx-2">
+                <div class="relative">
+                    <input type="text" id="searchInput" placeholder="ক্রমিক / ইনভয়েস আইডি দিয়ে খুঁজুন..." 
+                           class="w-full bg-slate-800 text-white placeholder-gray-400 pl-10 pr-24 py-1.5 rounded-lg text-sm border border-slate-700 focus:outline-none focus:border-blue-500 transition">
+                    <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3 top-2.5"></i>
+                    <button onclick="searchInvoiceFromFirebase()" class="absolute right-1 top-1 bottom-1 bg-blue-600 text-white px-3 text-xs rounded hover:bg-blue-700 transition">খুঁজুন</button>
+                </div>
+            </div>
+
+            <!-- Header Action Buttons -->
+            <div class="flex items-center space-x-2">
+                <button onclick="createNewInvoice()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1 shadow transition">
+                    <i data-lucide="plus-circle" class="w-4 h-4"></i> নতুন বিল
+                </button>
+                <button onclick="saveInvoiceToFirebase()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1 shadow transition">
+                    <i data-lucide="cloud-upload" class="w-4 h-4"></i> ফায়ারবেজে সেভ করুন
+                </button>
+                <button onclick="window.print()" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1 shadow transition">
+                    <i data-lucide="printer" class="w-4 h-4"></i> প্রিন্ট / PDF
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- LEFT PANEL: Input Form (No Print) -->
+        <section class="no-print lg:col-span-5 space-y-6 bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    <i data-lucide="edit-3" class="w-5 h-5 text-blue-600"></i> তথ্য এন্ট্রি ফরম
+                </h2>
+                <span class="text-xs bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full font-medium">অটো ক্রমিক জেনারেটর</span>
+            </div>
+
+            <!-- Form Tab Contents -->
+            <div class="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+
+                <!-- Shop & Invoice Meta -->
+                <div class="bg-gray-50 p-3.5 rounded-lg border border-gray-200 space-y-3">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">দোকান ও বিলের তথ্য</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-xs text-gray-600 font-semibold block mb-1">দোকানের নাম</label>
+                            <input type="text" id="formShopName" value="VAI VAI COMPUTER" oninput="updateInvoice()" class="w-full text-xs p-2 border rounded focus:ring-1 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-600 font-semibold block mb-1">ক্রমিক / ইনভয়েস নং</label>
+                            <input type="text" id="formInvoiceNo" readonly placeholder="অটো জেনারেট হবে" class="w-full text-xs p-2 bg-gray-100 border rounded font-mono font-bold text-blue-700 outline-none cursor-not-allowed">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-xs text-gray-600 font-semibold block mb-1">প্রোপ্রাইটর (মালিক)</label>
+                            <input type="text" id="formProprietor" value="Badsha" oninput="updateInvoice()" class="w-full text-xs p-2 border rounded outline-none">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-600 font-semibold block mb-1">তারিখ</label>
+                            <input type="text" id="formDate" value="8-Nov-26" oninput="updateInvoice()" class="w-full text-xs p-2 border rounded outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-600 font-semibold block mb-1">ঠিকানা</label>
+                        <input type="text" id="formShopAddress" value="Under Islami Bank, Faitong Bazar, Lama, Bandarban..." oninput="updateInvoice()" class="w-full text-xs p-2 border rounded outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-600 font-semibold block mb-1">মোবাইল নম্বর</label>
+                        <input type="text" id="formShopPhone" value="01842327770/01871-746120" oninput="updateInvoice()" class="w-full text-xs p-2 border rounded outline-none">
+                    </div>
+                </div>
+
+                <!-- Customer Details -->
+                <div class="bg-gray-50 p-3.5 rounded-lg border border-gray-200 space-y-3">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">ক্রেতার তথ্য (Bill To)</h3>
+                    <div>
+                        <label class="text-xs text-gray-600 font-semibold block mb-1">ক্রেতার নাম</label>
+                        <input type="text" id="formCustomerName" value="শাহীন" oninput="updateInvoice()" class="w-full text-xs p-2 border rounded outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-xs text-gray-600 font-semibold block mb-1">মোবাইল</label>
+                            <input type="text" id="formCustomerMobile" value="01700000000" oninput="updateInvoice()" class="w-full text-xs p-2 border rounded outline-none">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-600 font-semibold block mb-1">ঠিকানা</label>
+                            <input type="text" id="formCustomerAddress" value="ফৈতং, লামা" oninput="updateInvoice()" class="w-full text-xs p-2 border rounded outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Products Items Dynamic List -->
+                <div class="bg-gray-50 p-3.5 rounded-lg border border-gray-200 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">পণ্যের বিবরণ</h3>
+                        <button onclick="addProductRow()" class="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 px-2 py-1 rounded font-semibold flex items-center gap-1">
+                            <i data-lucide="plus" class="w-3 h-3"></i> আইটেম যোগ করুন
+                        </button>
+                    </div>
+                    <div id="productFormInputs" class="space-y-2"></div>
+                </div>
+
+                <!-- Payment Calculation Details -->
+                <div class="bg-gray-50 p-3.5 rounded-lg border border-gray-200 space-y-3">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">পেমেন্ট হিসাব</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-xs text-gray-600 font-semibold block mb-1">পূর্বের বাকি (Pre. Due)</label>
+                            <input type="number" id="formPreDue" value="0" oninput="updateInvoice()" class="w-full text-xs p-2 border rounded outline-none">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-600 font-semibold block mb-1">জমা প্রদান (Total Paid)</label>
+                            <input type="number" id="formTotalPaid" value="0" oninput="updateInvoice()" class="w-full text-xs p-2 border rounded outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-600 font-semibold block mb-1">কথায় (In Word)</label>
+                        <input type="text" id="formInWord" value="এক হাজার ছয়শত বত্রিশ টাকা মাত্র" oninput="updateInvoice()" class="w-full text-xs p-2 border rounded outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-600 font-semibold block mb-1">শর্তাবলী (Terms & Condition)</label>
+                        <input type="text" id="formTerms" value="Products sold are not refundable..." oninput="updateInvoice()" class="w-full text-xs p-2 border rounded outline-none">
+                    </div>
+                </div>
+
+                <!-- Signatures Edit -->
+                <div class="bg-gray-50 p-3.5 rounded-lg border border-gray-200 space-y-3">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">স্বাক্ষরকারী পরিচিতি</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-xs text-gray-600 font-semibold block mb-1">Prepared by</label>
+                            <input type="text" id="formPreparedBy" value="Ruhul Amin" oninput="updateInvoice()" class="w-full text-xs p-2 border rounded outline-none">
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-600 font-semibold block mb-1">Checked by</label>
+                            <input type="text" id="formCheckedBy" value="Md: Badsha" oninput="updateInvoice()" class="w-full text-xs p-2 border rounded outline-none">
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- RIGHT PANEL: Printable Paper Invoice Preview -->
+        <section class="lg:col-span-7 flex justify-center">
+            
+            <div id="invoicePaper" class="print-area invoice-box w-[210mm] min-h-[297mm] bg-white p-6 md:p-8 border border-gray-300 shadow-xl text-gray-900 text-xs relative flex flex-col justify-between rounded-sm">
+                
+                <!-- TOP HEADER -->
+                <div>
+                    <div class="flex justify-between items-center mb-1 text-[11px] font-mono text-gray-600">
+                        <span id="viewTime">18.47</span>
+                        <span class="text-base font-bold text-gray-800 tracking-widest font-sans">INVOICE</span>
+                        <span id="viewHeaderDate">08-11-2026</span>
+                    </div>
+
+                    <!-- SHOP NAME & QR CODE ROW -->
+                    <div class="flex justify-between items-start border-b-2 border-gray-800 pb-3 mb-3">
+                        <div class="pr-2">
+                            <h1 id="viewShopName" class="text-2xl md:text-3xl font-extrabold tracking-wider text-gray-900 font-sans uppercase">VAI VAI COMPUTER</h1>
+                            <p class="text-[11px] mt-0.5"><span class="font-bold">Proprietor:</span> <span id="viewProprietor">Badsha</span></p>
+                            <p id="viewShopAddress" class="text-[11px] text-gray-700 leading-tight">Under Islami Bank, Faitong Bazar, Lama, Bandarban...</p>
+                            <p class="text-[11px] text-gray-700"><span class="font-bold">Phone:</span> <span id="viewShopPhone">01842327770/01871-746120</span></p>
+                        </div>
+                        
+                        <!-- QR Code Image Section (Barcode Removed) -->
+                        <div class="flex flex-col items-end min-w-[100px]">
+                            <!-- Fixed QR Code Image -->
+                            <div class="mb-1 p-1 bg-white border border-gray-300 rounded">
+                                <img src="https://i.ibb.co.com/xqBTyJD1/Photo-260730084640-2.jpg" alt="QR Code" class="w-[58px] h-[58px] object-contain">
+                            </div>
+                            
+                            <div class="text-right mt-1 font-mono text-[11px]">
+                                <p><span class="font-bold">Invoice no:</span> <span id="viewInvoiceNo" class="font-bold text-black">0180</span></p>
+                                <p><span class="font-bold">Date:</span> <span id="viewDate">8-Nov-26</span></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BILL TO SECTION -->
+                    <div class="mb-4 bg-gray-50/50 p-2 border border-gray-200 rounded-sm">
+                        <p class="font-bold text-gray-800 tracking-wide text-[11px]">BILL TO :</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-0.5 text-[11px] mt-1">
+                            <p><span class="font-semibold text-gray-600">Name :</span> <span id="viewCustomerName" class="font-bold">শাহীন</span></p>
+                            <p><span class="font-semibold text-gray-600">Mobile :</span> <span id="viewCustomerMobile"></span></p>
+                            <p class="col-span-1 md:col-span-2"><span class="font-semibold text-gray-600">Address :</span> <span id="viewCustomerAddress"></span></p>
+                        </div>
+                    </div>
+
+                    <!-- PRODUCTS TABLE -->
+                    <table class="w-full border-collapse border border-gray-800 text-left text-[11px] mb-4">
+                        <thead>
+                            <tr class="bg-gray-100 border-b border-gray-800 font-bold uppercase tracking-wider text-[10px]">
+                                <th class="border border-gray-800 p-1.5 w-10 text-center">S/L</th>
+                                <th class="border border-gray-800 p-1.5">Product Description</th>
+                                <th class="border border-gray-800 p-1.5 text-center w-16">QTY</th>
+                                <th class="border border-gray-800 p-1.5 text-right w-24">UNIT PRICE</th>
+                                <th class="border border-gray-800 p-1.5 text-right w-24">TOTAL</th>
+                            </tr>
+                        </thead>
+                        <tbody id="viewProductTable"></tbody>
+                    </table>
+
+                    <!-- TOTAL CALCULATIONS TABLE -->
+                    <div class="flex justify-end mb-4">
+                        <table class="w-full md:w-1/2 border-collapse border border-gray-800 text-[11px]">
+                            <tr>
+                                <td class="border border-gray-800 p-1 font-bold bg-gray-50">PRE: DEU:</td>
+                                <td id="viewPreDue" class="border border-gray-800 p-1 text-right mono-font">0.0</td>
+                            </tr>
+                            <tr>
+                                <td class="border border-gray-800 p-1 font-bold bg-gray-50">SUB TOTAL:</td>
+                                <td id="viewSubTotal" class="border border-gray-800 p-1 text-right font-bold mono-font">BDT 1,632.0</td>
+                            </tr>
+                            <tr>
+                                <td class="border border-gray-800 p-1 font-bold bg-gray-50">TOTAL PAID:</td>
+                                <td id="viewTotalPaid" class="border border-gray-800 p-1 text-right mono-font">0.0</td>
+                            </tr>
+                            <tr>
+                                <td class="border border-gray-800 p-1 font-bold bg-gray-50">TOTAL DEU:</td>
+                                <td id="viewTotalDue" class="border border-gray-800 p-1 text-right font-bold text-black mono-font">BDT 1,632.0</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <!-- TERMS & IN WORD -->
+                    <div class="space-y-1 text-[11px] border-t border-gray-200 pt-2 mb-4">
+                        <p><span class="font-bold text-gray-700">In Word:</span> <span id="viewInWord" class="italic"></span></p>
+                        <p><span class="font-bold text-gray-700">Term & Condition:</span> <span id="viewTerms" class="italic"></span></p>
+                    </div>
+
+                    <p class="text-center text-[11px] italic font-semibold text-gray-700 mt-2">Thanks you for your Business..</p>
+                </div>
+
+                <!-- SIGNATURES AND FOOTER -->
+                <div class="mt-8">
+                    <div class="grid grid-cols-3 text-center text-[11px] pt-8">
+                        <div class="flex flex-col items-center">
+                            <div class="h-8 mb-1 flex items-end">
+                                <span class="font-serif italic text-blue-900 text-lg font-bold border-b border-gray-400 px-2 select-none">Ruhul</span>
+                            </div>
+                            <p class="font-bold border-t border-gray-800 pt-1 w-4/5">Prepared by:</p>
+                            <p id="viewPreparedBy" class="text-[10px] text-gray-600">Ruhul Amin</p>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <div class="h-8 mb-1 flex items-end">
+                                <span class="font-serif italic text-red-700 text-lg font-bold border-b border-gray-400 px-2 select-none">Badsha</span>
+                            </div>
+                            <p class="font-bold border-t border-gray-800 pt-1 w-4/5">Checked by:</p>
+                            <p id="viewCheckedBy" class="text-[10px] text-gray-600">Md: Badsha</p>
+                        </div>
+                        <div class="flex flex-col items-center justify-end">
+                            <div class="h-8 mb-1"></div>
+                            <p class="font-bold border-t border-gray-800 pt-1 w-4/5">Recevied by:</p>
+                            <p class="text-[10px] text-gray-600">&nbsp;</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 text-center text-[11px] border-t border-gray-800 pt-2 text-gray-800">
+                        <p class="font-bold text-sm text-blue-900 font-sans">ভাই ভাই কম্পিউটার'স</p>
+                        <p class="text-[10px]">ruhulamin4232@gmail.com | https://web.facebook.com/rs4232</p>
+                        <p class="text-[10px] font-mono">+8801842-327770</p>
+                    </div>
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="no-print fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-2.5 rounded-lg shadow-xl text-sm transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-2 z-50">
+        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+        <span id="toastMsg">সফলভাবে সম্পন্ন হয়েছে!</span>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAS9d4F-qM5FlSiZe0iASpLJZHHOWrDpGI",
+            authDomain: "vai-vai-computer-ee61e.firebaseapp.com",
+            databaseURL: "https://vai-vai-computer-ee61e-default-rtdb.firebaseio.com",
+            projectId: "vai-vai-computer-ee61e",
+            storageBucket: "vai-vai-computer-ee61e.firebasestorage.app",
+            messagingSenderId: "292854514048",
+            appId: "1:292854514048:web:228836f0b0a4c27393c165",
+            measurementId: "G-L4DZX85MMQ"
+        };
+
+        // Initialize Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+
+        let products = [
+            { desc: "অনলাইন ডাউনলোড প্রিন্ট সার্ভিসেস", qty: 4.0, price: 350.0 },
+            { desc: "ছবি", qty: 16.0, price: 8.0 },
+            { desc: "ফটোকপি", qty: 26.0, price: 4.0 }
+        ];
+
+        window.onload = function() {
+            lucide.createIcons();
+            renderProductInputs();
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const invQuery = urlParams.get('inv');
+            if(invQuery) {
+                document.getElementById('searchInput').value = invQuery;
+                searchInvoiceFromFirebase();
+            } else {
+                createNewInvoice();
+            }
+        };
+
+        function renderProductInputs() {
+            const container = document.getElementById('productFormInputs');
+            container.innerHTML = '';
+
+            products.forEach((prod, idx) => {
+                const row = document.createElement('div');
+                row.className = "flex items-center gap-1.5 bg-white p-2 rounded border border-gray-200 shadow-sm";
+                row.innerHTML = `
+                    <span class="text-xs font-bold text-gray-400 w-4 text-center">${idx + 1}</span>
+                    <input type="text" value="${prod.desc}" placeholder="পণ্যের বিবরণ" oninput="updateProduct(${idx}, 'desc', this.value)" class="flex-1 text-xs p-1.5 border rounded outline-none">
+                    <input type="number" value="${prod.qty}" placeholder="পরিমাণ" oninput="updateProduct(${idx}, 'qty', this.value)" class="w-14 text-xs p-1.5 border rounded outline-none text-center">
+                    <input type="number" value="${prod.price}" placeholder="দাম" oninput="updateProduct(${idx}, 'price', this.value)" class="w-16 text-xs p-1.5 border rounded outline-none text-right">
+                    <button onclick="removeProductRow(${idx})" class="text-red-500 hover:text-red-700 p-1">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    </button>
+                `;
+                container.appendChild(row);
+            });
+            lucide.createIcons();
+        }
+
+        function addProductRow() {
+            products.push({ desc: "", qty: 1, price: 0 });
+            renderProductInputs();
+            updateInvoice();
+        }
+
+        function removeProductRow(index) {
+            if (products.length > 1) {
+                products.splice(index, 1);
+                renderProductInputs();
+                updateInvoice();
+            } else {
+                showToast("নূ্যনতম একটি প্রোডাক্ট থাকা আবশ্যক!");
+            }
+        }
+
+        function updateProduct(index, field, value) {
+            if (field === 'qty' || field === 'price') {
+                products[index][field] = parseFloat(value) || 0;
+            } else {
+                products[index][field] = value;
+            }
+            updateInvoice();
+        }
+
+        function updateInvoice() {
+            const shopName = document.getElementById('formShopName').value;
+            const invoiceNo = document.getElementById('formInvoiceNo').value || '0180';
+            const proprietor = document.getElementById('formProprietor').value;
+            const dateVal = document.getElementById('formDate').value;
+
+            document.getElementById('viewShopName').innerText = shopName;
+            document.getElementById('viewInvoiceNo').innerText = invoiceNo;
+            document.getElementById('viewProprietor').innerText = proprietor;
+            document.getElementById('viewDate').innerText = dateVal;
+            document.getElementById('viewHeaderDate').innerText = dateVal;
+            document.getElementById('viewShopAddress').innerText = document.getElementById('formShopAddress').value;
+            document.getElementById('viewShopPhone').innerText = document.getElementById('formShopPhone').value;
+
+            document.getElementById('viewCustomerName').innerText = document.getElementById('formCustomerName').value;
+            document.getElementById('viewCustomerMobile').innerText = document.getElementById('formCustomerMobile').value;
+            document.getElementById('viewCustomerAddress').innerText = document.getElementById('formCustomerAddress').value;
+
+            const tableBody = document.getElementById('viewProductTable');
+            tableBody.innerHTML = '';
+
+            let subtotal = 0;
+            products.forEach((prod, index) => {
+                const total = (prod.qty * prod.price);
+                subtotal += total;
+
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-gray-300";
+                tr.innerHTML = `
+                    <td class="border-r border-l border-gray-800 p-1.5 text-center">${index + 1}</td>
+                    <td class="border-r border-l border-gray-800 p-1.5">${prod.desc}</td>
+                    <td class="border-r border-l border-gray-800 p-1.5 text-center mono-font">${prod.qty.toFixed(1)}</td>
+                    <td class="border-r border-l border-gray-800 p-1.5 text-right mono-font">${prod.price.toFixed(1)}</td>
+                    <td class="border-r border-l border-gray-800 p-1.5 text-right font-semibold mono-font">${total.toFixed(1)}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+
+            for (let i = products.length; i < 4; i++) {
+                const tr = document.createElement('tr');
+                tr.className = "h-8";
+                tr.innerHTML = `<td class="border-r border-l border-gray-800"></td><td class="border-r border-l border-gray-800"></td><td class="border-r border-l border-gray-800"></td><td class="border-r border-l border-gray-800"></td><td class="border-r border-l border-gray-800"></td>`;
+                tableBody.appendChild(tr);
+            }
+
+            const preDue = parseFloat(document.getElementById('formPreDue').value) || 0;
+            const totalPaid = parseFloat(document.getElementById('formTotalPaid').value) || 0;
+            const totalDue = (subtotal + preDue) - totalPaid;
+
+            document.getElementById('viewPreDue').innerText = preDue > 0 ? preDue.toFixed(1) : '';
+            document.getElementById('viewSubTotal').innerText = `BDT ${subtotal.toLocaleString('en-US', {minimumFractionDigits: 1})}`;
+            document.getElementById('viewTotalPaid').innerText = totalPaid > 0 ? totalPaid.toFixed(1) : '';
+            document.getElementById('viewTotalDue').innerText = `BDT ${totalDue.toLocaleString('en-US', {minimumFractionDigits: 1})}`;
+
+            document.getElementById('viewInWord').innerText = document.getElementById('formInWord').value;
+            document.getElementById('viewTerms').innerText = document.getElementById('formTerms').value;
+            document.getElementById('viewPreparedBy').innerText = document.getElementById('formPreparedBy').value;
+            document.getElementById('viewCheckedBy').innerText = document.getElementById('formCheckedBy').value;
+        }
+
+        function createNewInvoice() {
+            const autoId = 'INV-' + Math.floor(100000 + Math.random() * 900000);
+            document.getElementById('formInvoiceNo').value = autoId;
+            document.getElementById('formCustomerName').value = '';
+            document.getElementById('formCustomerMobile').value = '';
+            document.getElementById('formCustomerAddress').value = '';
+            products = [{ desc: "", qty: 1, price: 0 }];
+            renderProductInputs();
+            updateInvoice();
+            showToast("নতুন ক্রমিক নম্বর জেনারেট করা হয়েছে!");
+        }
+
+        function saveInvoiceToFirebase() {
+            const invoiceNo = document.getElementById('formInvoiceNo').value.trim();
+            if(!invoiceNo) {
+                showToast("ক্রমিক নম্বর পাওয়া যায়নি!");
+                return;
+            }
+
+            const invoiceData = {
+                invoiceNo: invoiceNo,
+                shopName: document.getElementById('formShopName').value,
+                proprietor: document.getElementById('formProprietor').value,
+                date: document.getElementById('formDate').value,
+                shopAddress: document.getElementById('formShopAddress').value,
+                shopPhone: document.getElementById('formShopPhone').value,
+                customerName: document.getElementById('formCustomerName').value,
+                customerMobile: document.getElementById('formCustomerMobile').value,
+                customerAddress: document.getElementById('formCustomerAddress').value,
+                products: products,
+                preDue: document.getElementById('formPreDue').value,
+                totalPaid: document.getElementById('formTotalPaid').value,
+                inWord: document.getElementById('formInWord').value,
+                terms: document.getElementById('formTerms').value,
+                preparedBy: document.getElementById('formPreparedBy').value,
+                checkedBy: document.getElementById('formCheckedBy').value,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            db.collection("invoices").doc(invoiceNo).set(invoiceData)
+                .then(() => {
+                    showToast(`ইনভয়েস #${invoiceNo} ফায়ারবেজে সফলভাবে সেভ হয়েছে!`);
+                })
+                .catch((error) => {
+                    console.error("Error writing document: ", error);
+                    showToast("সেভ করতে সমস্যা হয়েছে!");
+                });
+        }
+
+        function searchInvoiceFromFirebase() {
+            const query = document.getElementById('searchInput').value.trim();
+            if(!query) {
+                showToast("অনুগ্রহ করে ক্রমিক নম্বর লিখুন!");
+                return;
+            }
+
+            db.collection("invoices").doc(query).get().then((doc) => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    document.getElementById('formShopName').value = data.shopName || '';
+                    document.getElementById('formInvoiceNo').value = data.invoiceNo || '';
+                    document.getElementById('formProprietor').value = data.proprietor || '';
+                    document.getElementById('formDate').value = data.date || '';
+                    document.getElementById('formShopAddress').value = data.shopAddress || '';
+                    document.getElementById('formShopPhone').value = data.shopPhone || '';
+                    
+                    document.getElementById('formCustomerName').value = data.customerName || '';
+                    document.getElementById('formCustomerMobile').value = data.customerMobile || '';
+                    document.getElementById('formCustomerAddress').value = data.customerAddress || '';
+
+                    products = data.products || [];
+                    renderProductInputs();
+
+                    document.getElementById('formPreDue').value = data.preDue || 0;
+                    document.getElementById('formTotalPaid').value = data.totalPaid || 0;
+                    document.getElementById('formInWord').value = data.inWord || '';
+                    document.getElementById('formTerms').value = data.terms || '';
+                    document.getElementById('formPreparedBy').value = data.preparedBy || '';
+                    document.getElementById('formCheckedBy').value = data.checkedBy || '';
+
+                    updateInvoice();
+                    showToast(`ইনভয়েস #${query} সফলভাবে লোড হয়েছে!`);
+                } else {
+                    showToast(`এই ক্রমিক নম্বরের কোনো ইনভয়েস পাওয়া যায়নি!`);
+                }
+            }).catch((error) => {
+                console.error("Error getting document:", error);
+                showToast("সার্চ করতে সমস্যা হয়েছে!");
+            });
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = message;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
